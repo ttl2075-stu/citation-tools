@@ -2,6 +2,10 @@
 
 A small Flask web application for converting academic reference formats and managing a browser-local BibTeX collection.
 
+## Demo
+
+Published demo: <https://bib2ris.long.pro.vn>
+
 ## Features
 
 - Convert `BibTeX -> RIS`
@@ -104,3 +108,7 @@ The smoke test covers the conversion helpers and Flask endpoints, including the 
 - Text output is UTF-8.
 - DOI and ISBN conversion depend on external metadata services.
 - The browser BibTeX repository is stored locally in `localStorage`; it is not saved on the server.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
