@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bộ chuyển đổi BibTeX, RIS, DOI, ISBN</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+  <header class="header">
+    <div class="brand">
+      <span class="material-symbols-outlined">autorenew</span>
+      <span>Bộ chuyển đổi trích dẫn</span>
+    </div>
+    <div class="header-actions">
+      <button type="button" id="manager-btn" class="btn-outline btn-icon">
+        <span class="material-symbols-outlined">library_books</span>
+        <span>Quản lý BibTeX</span>
+      </button>
+      <button type="button" id="settings-btn" class="btn-outline btn-icon">
+        <span class="material-symbols-outlined">settings</span>
+        <span>Cài đặt</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page">
+    <form id="converter-form" method="post" enctype="multipart/form-data">
+      <input type="hidden" id="conversion-type" name="type" value="bib2ris">
+      <input type="file" id="file-input" name="file_input" class="hidden">
+
+      <div class="tabs">
+        <button type="button" id="tab-bib2ris" class="tab-btn active">BibTeX sang RIS</button>
+        <button type="button" id="tab-ris2bib" class="tab-btn">RIS sang BibTeX</button>
+        <button type="button" id="tab-doi2bib" class="tab-btn">DOI sang BibTeX</button>
+        <button type="button" id="tab-isbn2bib" class="tab-btn">ISBN sang BibTeX</button>
+      </div>
+
+      <div class="toolbar">
+        <button type="submit" id="convert-btn" class="btn-primary btn-icon">
+          <span class="material-symbols-outlined">swap_horiz</span>
+          Chuyển đổi trích dẫn
+        </button>
+      </div>
+
+      <div class="grid">
+        <section class="card">
+          <div class="card-head">
+            <strong id="input-title">Đầu vào: BibTeX</strong>
+            <div class="card-actions">
+              <button type="button" id="clear-btn" class="btn-link">Xoá</button>
+              <button type="button" id="upload-btn" class="btn-outline btn-icon">
+                <span class="material-symbols-outlined">upload_file</span>
+                Tải lên
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <textarea id="input-text" name="input_text" placeholder="Dán trích dẫn BibTeX tại đây..."></textarea>
+            <div id="duplicate-warning" class="duplicate-warning hidden"></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <strong id="output-title">Đầu ra: RIS</strong>
+            <div class="card-actions">
+              <button type="button" id="copy-btn" class="btn-outline btn-icon">
+                <span class="material-symbols-outlined">content_copy</span>
+                Sao chép
+              </button>
+              <button type="button" id="download-btn" class="btn-outline btn-icon">
+                <span class="material-symbols-outlined">download</span>
+                <span id="download-btn-text">Tải xuống .ris</span>
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <textarea id="output-text" readonly placeholder="Kết quả chuyển đổi sẽ hiển thị tại đây..."></textarea>
+          </div>
+        </section>
+      </div>
+
+      <div id="notification-area" aria-live="polite" aria-atomic="true"></div>
+
+      <section id="bibtex-workspace" class="bibtex-workspace hidden">
+        <div class="workspace-column">
+          <div class="workspace-head">
+            <div>
+              <strong>BibTeX đã tạo</strong>
+              <small>Nhấn Enter trong ô key để lưu và gỡ khỏi danh sách này.</small>
+            </div>
+            <button type="button" id="save-all-bibtex" class="btn-primary">Lưu tất cả</button>
+          </div>
+          <div id="generated-entries" class="bibtex-entry-list"></div>
+        </div>
+
+        <div class="workspace-column">
+          <div class="workspace-head">
+            <div>
+              <strong>Kho BibTeX</strong>
+              <small id="repository-count">0 mục đã lưu</small>
+            </div>
+            <div class="card-actions">
+              <select id="repository-page-size" class="compact-select" aria-label="Số mục mỗi trang trong kho">
+                <option value="10">10 / trang</option>
+                <option value="20">20 / trang</option>
+              </select>
+              <button type="button" id="export-repository" class="btn-outline">Xuất .bib</button>
+              <button type="button" id="clear-repository" class="btn-link">Xoá</button>
+            </div>
+          </div>
+          <div id="repository-entries" class="repository-list"></div>
+          <div id="repository-pagination" class="pagination"></div>
+        </div>
+      </section>
+    </form>
+  </main>
+
+  <div id="manager-modal" class="modal-overlay hidden">
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <div>
+          <strong>Quản lý BibTeX</strong>
+          <small>Định dạng và kiểm tra trùng lặp bằng bibtex-tidy.</small>
+        </div>
+        <button id="close-manager" type="button" class="btn-link">Đóng</button>
+      </div>
+
+      <div class="manager-layout">
+        <section class="manager-panel">
+          <div class="form-grid">
+            <label>
+              Quy tắc phát hiện trùng lặp
+              <select id="tidy-duplicates" multiple size="4">
+                <option value="doi" selected>DOI</option>
+                <option value="key" selected>Khoá</option>
+                <option value="abstract">Tóm tắt</option>
+                <option value="citation" selected>Tác giả + Nhan đề</option>
+              </select>
+            </label>
+            <label>
+              Gộp mục trùng lặp
+              <select id="tidy-merge">
+                <option value="">Chỉ cảnh báo</option>
+                <option value="first">Giữ mục đầu tiên</option>
+                <option value="last">Giữ mục cuối cùng</option>
+                <option value="combine">Kết hợp trường</option>
+                <option value="overwrite">Ghi đè trường</option>
+              </select>
+            </label>
+            <label>
+              Độ rộng căn chỉnh
+              <input id="tidy-align" type="number" min="0" value="14">
+            </label>
+            <label>
+              Cột ngắt dòng
+              <input id="tidy-wrap" type="number" min="0" value="0">
+            </label>
+          </div>
+
+          <div class="option-grid">
+            <label><input id="tidy-curly" type="checkbox"> Dùng ngoặc nhọn</label>
+            <label><input id="tidy-sort" type="checkbox" checked> Sắp xếp theo khoá</label>
+            <label><input id="tidy-sort-fields" type="checkbox" checked> Sắp xếp trường</label>
+            <label><input id="tidy-blank-lines" type="checkbox" checked> Dòng trống</label>
+            <label><input id="tidy-remove-empty" type="checkbox" checked> Xoá trường rỗng</label>
+            <label><input id="tidy-remove-dupe-fields" type="checkbox" checked> Xoá trường trùng lặp</label>
+            <label><input id="tidy-strip-comments" type="checkbox"> Xoá chú thích</label>
+            <label><input id="tidy-trailing-commas" type="checkbox"> Dấu phẩy cuối dòng</label>
+            <label><input id="tidy-strip-enclosing" type="checkbox"> Bỏ ngoặc bao ngoài</label>
+            <label><input id="tidy-drop-caps" type="checkbox"> Bỏ viết hoa toàn bộ</label>
+            <label><input id="tidy-encode-urls" type="checkbox"> Mã hoá URL</label>
+          </div>
+
+          <div class="modal-actions">
+            <button id="tidy-copy-repository" type="button" class="btn-outline">Sao chép tất cả</button>
+            <button id="tidy-run" type="button" class="btn-primary">Chạy bibtex-tidy</button>
+            <button id="tidy-apply" type="button" class="btn-primary" disabled>Áp dụng vào kho</button>
+          </div>
+        </section>
+
+        <section class="manager-panel">
+          <strong>Cảnh báo</strong>
+          <div id="tidy-warnings" class="warning-list"></div>
+          <strong>Xem trước</strong>
+          <textarea id="tidy-preview" readonly placeholder="Bản xem trước BibTeX đã định dạng sẽ hiển thị tại đây."></textarea>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="entry-modal" class="modal-overlay hidden">
+    <div class="modal modal-entry">
+      <div class="modal-head">
+        <strong id="entry-modal-title">Mục BibTeX</strong>
+        <button id="close-entry-modal" type="button" class="btn-link">Đóng</button>
+      </div>
+      <label id="entry-key-label" class="hidden">
+        Khoá trích dẫn
+        <input id="entry-key-input" type="text">
+      </label>
+      <textarea id="entry-textarea" readonly></textarea>
+      <div class="modal-actions">
+        <button id="entry-copy" type="button" class="btn-outline">Sao chép</button>
+        <button id="entry-save" type="button" class="btn-primary hidden">Lưu thay đổi</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="card-head" style="margin: -16px -16px 12px -16px; border-radius: 10px 10px 0 0;">
+        <strong>Cài đặt</strong>
+        <button id="close-settings" type="button" class="btn-link">Đóng</button>
+      </div>
+
+      <div class="setting-item">
+        <div>
+          <div><strong>Tự động sao chép kết quả</strong></div>
+          <small>Tự động sao chép đầu ra sau khi chuyển đổi</small>
+        </div>
+        <input id="auto-copy-toggle" type="checkbox" style="width: auto; margin: 0;">
+      </div>
+
+      <div class="setting-item">
+        <div>
+          <div><strong>Chỉnh sửa kết quả</strong></div>
+          <small>Cho phép chỉnh sửa ô đầu ra</small>
+        </div>
+        <input id="edit-mode-toggle" type="checkbox" style="width: auto; margin: 0;">
+      </div>
+
+      <div class="modal-actions">
+        <button id="reset-settings" type="button" class="btn-outline">Đặt lại</button>
+        <button id="save-settings" type="button" class="btn-primary">Lưu</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260505-grid-toast-keys"></script>
+</body>
+</html>
