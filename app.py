@@ -15,6 +15,22 @@ app = Flask(__name__)
 BASE_DIR = Path(__file__).resolve().parent
 
 
+def get_asset_version():
+    configured_version = os.getenv('ASSET_VERSION')
+    if configured_version:
+        return configured_version
+
+    asset_paths = [
+        BASE_DIR / 'static' / 'css' / 'app.css',
+        BASE_DIR / 'static' / 'js' / 'app.js',
+    ]
+    latest_mtime = max(path.stat().st_mtime for path in asset_paths if path.exists())
+    return str(int(latest_mtime))
+
+
+ASSET_VERSION = get_asset_version()
+
+
 def get_source_text():
     input_text = request.form.get('input_text') or ''
     input_file = request.files.get('file_input')
@@ -117,7 +133,7 @@ def run_bibtex_tidy(bibtex_text, options):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', asset_version=ASSET_VERSION)
 
 
 @app.route('/api/bibtex-to-ris', methods=['POST'])
@@ -196,4 +212,3 @@ def download():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', '5000')), debug=False)
-

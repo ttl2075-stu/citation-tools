@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=asset_version) }}">
 </head>
 <body>
   <header class="header">
@@ -242,6 +242,6 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260505-grid-toast-keys"></script>
+  <script src="{{ url_for('static', filename='js/app.js', v=asset_version) }}"></script>
 </body>
 </html>
