@@ -14,6 +14,8 @@ Published demo: <https://bib2ris.long.pro.vn>
 - Convert ISBN lists to BibTeX
 - Store generated BibTeX entries in the browser with `localStorage`
 - Edit citation keys before saving entries
+- Create manual BibTeX entries for references without DOI/ISBN/publication codes
+- Generate a draft BibTeX entry from free-form reference information with the OpenAI API
 - Format and check BibTeX collections with `bibtex-tidy`
 
 ## Requirements
@@ -23,6 +25,8 @@ Published demo: <https://bib2ris.long.pro.vn>
 - npm
 
 Node.js is required because the BibTeX repository cleanup endpoint uses the `bibtex-tidy` npm package.
+
+Optional AI BibTeX generation uses the OpenAI Responses API. Set `OPENAI_API_KEY` on the server before using it. You can override the default model with `OPENAI_MODEL`; otherwise the app uses `gpt-5.4-mini`.
 
 ## Local Setup
 
@@ -54,6 +58,23 @@ Each conversion endpoint accepts either form field `input_text` or uploaded file
 - `POST /api/ris-to-bibtex`
 - `POST /api/doi-to-bibtex`
 - `POST /api/isbn-to-bibtex`
+
+For DOI and ISBN input, each non-empty line is one identifier. Prefix a line with `{citationKey}` to use that key in the generated BibTeX instead of the service-provided or generated key:
+
+```text
+{nguyen2026survey}10.1000/demo
+{bookKey2024}978-0-446-31078-9
+```
+
+The AI BibTeX endpoint accepts JSON:
+
+```json
+{
+  "source_text": "Title, authors, year, journal/conference, pages, URL..."
+}
+```
+
+- `POST /api/ai-bibtex`
 
 The BibTeX cleanup endpoint accepts JSON:
 

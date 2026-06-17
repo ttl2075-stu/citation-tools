@@ -43,6 +43,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const tidyWarnings = document.getElementById("tidy-warnings");
   const tidyPreview = document.getElementById("tidy-preview");
 
+  const manualBibtexBtn = document.getElementById("manual-bibtex-btn");
+  const manualBibtexModal = document.getElementById("manual-bibtex-modal");
+  const closeManualBibtex = document.getElementById("close-manual-bibtex");
+  const manualBibtexInput = document.getElementById("manual-bibtex-input");
+  const manualBibtexClear = document.getElementById("manual-bibtex-clear");
+  const manualBibtexSave = document.getElementById("manual-bibtex-save");
+  const aiBibtexSource = document.getElementById("ai-bibtex-source");
+  const aiBibtexGenerate = document.getElementById("ai-bibtex-generate");
+
   const entryModal = document.getElementById("entry-modal");
   const entryModalTitle = document.getElementById("entry-modal-title");
   const closeEntryModal = document.getElementById("close-entry-modal");
@@ -190,6 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function normalizeDoi(value) {
     let normalized = (value || "").trim();
     if (!normalized) return "";
+    normalized = stripRequestedKey(normalized);
     normalized = normalized.replace(/^doi\s*:\s*/i, "").replace(/^<+|>+$/g, "");
     const match = normalized.match(/^(?:https?:\/\/)?(?:dx\.)?doi\.org\/(.+)$/i);
     if (match) normalized = match[1].trim();
@@ -200,10 +210,16 @@ document.addEventListener("DOMContentLoaded", () => {
   function normalizeIsbn(value) {
     let normalized = (value || "").trim();
     if (!normalized) return "";
+    normalized = stripRequestedKey(normalized);
     normalized = normalized.replace(/^isbn\s*:?\s*/i, "");
     normalized = normalized.replace(/[^\dXx \-]/g, "");
     const compact = normalized.replace(/[ -]/g, "").toUpperCase();
     return /^\d{13}$/.test(compact) || /^\d{9}[\dX]$/.test(compact) ? compact : "";
+  }
+
+  function stripRequestedKey(value) {
+    const match = String(value || "").trim().match(/^\{[^{}]+\}\s*(.+)$/);
+    return match ? match[1].trim() : String(value || "").trim();
   }
 
   function updateDuplicateWarning() {
@@ -242,9 +258,11 @@ document.addEventListener("DOMContentLoaded", () => {
     duplicateWarning.classList.remove("hidden");
   }
 
-  function parseBibtexEntries(bibtexText) {
+  function parseBibtexEntries(bibtexText, options = {}) {
     const entries = [];
     const usedKeys = collectUsedKeys(currentGeneratedEntries);
+    const requestedKeys = Array.isArray(options.requestedKeys) ? options.requestedKeys : [];
+    const preserveExistingKeys = !!options.preserveExistingKeys;
     let current = "";
     let braceDepth = 0;
     let started = false;
@@ -265,7 +283,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (started && braceDepth <= 0 && current.trim()) {
           const entry = current.trim();
-          const key = createHexKey(usedKeys);
+          const requestedKey = String(requestedKeys[entries.length] || "").trim();
+          const existingKey = preserveExistingKeys ? extractBibtexKey(entry) : "";
+          const key = requestedKey || existingKey || createHexKey(usedKeys);
+          usedKeys.add(normalizeKeyForCompare(key));
           entries.push({
             id: `${Date.now()}-${entries.length}-${Math.random().toString(36).slice(2)}`,
             key,
@@ -277,6 +298,11 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
     return entries;
+  }
+
+  function extractBibtexKey(entryText) {
+    const match = String(entryText || "").match(/^@[^{\s]+\s*{\s*([^,\s]+)\s*,/);
+    return match ? match[1].trim() : "";
   }
 
   function replaceBibtexKey(entryText, nextKey) {
@@ -467,12 +493,12 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (mode === "doi2bib") {
       inputTitle.textContent = "Đầu vào: DOI (mỗi dòng một DOI)";
       outputTitle.textContent = "Đầu ra: BibTeX";
-      inputText.placeholder = "Mỗi dòng một DOI. Hỗ trợ: 10.x/... hoặc doi.org/...";
+      inputText.placeholder = "Mỗi dòng một DOI. Có thể dùng {key}10.x/... để đặt khoá BibTeX.";
       downloadBtnText.textContent = "Tải xuống .bib";
     } else {
       inputTitle.textContent = "Đầu vào: ISBN (mỗi dòng một ISBN)";
       outputTitle.textContent = "Đầu ra: BibTeX";
-      inputText.placeholder = "Mỗi dòng một ISBN. Ví dụ: 978-0-446-31078-9";
+      inputText.placeholder = "Mỗi dòng một ISBN. Có thể dùng {key}978-0-446-31078-9 để đặt khoá BibTeX.";
       downloadBtnText.textContent = "Tải xuống .bib";
     }
 
@@ -550,6 +576,81 @@ document.addEventListener("DOMContentLoaded", () => {
       createdAt: now,
       updatedAt: now,
     }));
+  }
+
+  function openManualBibtexModal() {
+    manualBibtexModal.classList.remove("hidden");
+    manualBibtexInput.focus();
+  }
+
+  function closeManualBibtexModal() {
+    manualBibtexModal.classList.add("hidden");
+  }
+
+  function saveManualBibtex() {
+    const bibtex = manualBibtexInput.value.trim();
+    if (!bibtex) {
+      showNotification("Vui lòng dán hoặc tạo mã BibTeX trước khi lưu.", "warning");
+      return;
+    }
+
+    const parsedEntries = parseBibtexEntries(bibtex, { preserveExistingKeys: true }).map((entry) => ({
+      ...entry,
+      sourceMode: "manual",
+    }));
+    if (!parsedEntries.length) {
+      showNotification("Không tìm thấy mục BibTeX hợp lệ trong ô nhập.", "error");
+      return;
+    }
+
+    const result = saveBibtexEntries(parsedEntries);
+    if (result.savedEntries.length) {
+      repositoryState.page = 1;
+      renderRepository();
+      manualBibtexInput.value = "";
+      closeManualBibtexModal();
+      showNotification(`Đã lưu ${result.savedEntries.length} mục BibTeX thủ công.`, "success");
+    }
+    if (result.skippedEntries.length) {
+      showNotification(
+        `Không lưu ${result.skippedEntries.length} mục vì key trùng hoặc không hợp lệ.`,
+        "warning",
+        result.skippedEntries.map((item) => item.reason)
+      );
+    }
+  }
+
+  function generateAiBibtex() {
+    const sourceText = aiBibtexSource.value.trim();
+    if (!sourceText) {
+      showNotification("Vui lòng nhập thông tin bài viết cho AI.", "warning");
+      return;
+    }
+
+    aiBibtexGenerate.disabled = true;
+    aiBibtexGenerate.dataset.originalText = aiBibtexGenerate.textContent;
+    aiBibtexGenerate.textContent = "Đang tạo...";
+
+    fetch("/api/ai-bibtex", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source_text: sourceText }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.error) {
+          showNotification(data.error, "error");
+          return;
+        }
+
+        manualBibtexInput.value = data.bibtex || data.output_text || "";
+        showNotification("AI đã tạo mã BibTeX. Vui lòng kiểm tra trước khi lưu.", "success");
+      })
+      .catch(() => showNotification("Không thể gọi API tạo BibTeX bằng AI.", "error"))
+      .finally(() => {
+        aiBibtexGenerate.disabled = false;
+        aiBibtexGenerate.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span>Tạo bằng AI';
+      });
   }
 
   Object.entries(tabs).forEach(([mode, tab]) => {
@@ -818,6 +919,17 @@ document.addEventListener("DOMContentLoaded", () => {
     showNotification(`Đã áp dụng kho BibTeX đã định dạng với ${entries.length} mục.`, "success");
   });
 
+  manualBibtexBtn.addEventListener("click", openManualBibtexModal);
+  closeManualBibtex.addEventListener("click", closeManualBibtexModal);
+  manualBibtexModal.addEventListener("click", (event) => {
+    if (event.target === manualBibtexModal) closeManualBibtexModal();
+  });
+  manualBibtexClear.addEventListener("click", () => {
+    manualBibtexInput.value = "";
+  });
+  manualBibtexSave.addEventListener("click", saveManualBibtex);
+  aiBibtexGenerate.addEventListener("click", generateAiBibtex);
+
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const formData = new FormData(form);
@@ -838,7 +950,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         outputText.value = data.output_text || "";
-        currentGeneratedEntries = isBibtexMode() ? parseBibtexEntries(outputText.value) : [];
+        currentGeneratedEntries = isBibtexMode()
+          ? parseBibtexEntries(outputText.value, { requestedKeys: data.citation_keys || [] })
+          : [];
         renderGeneratedEntries();
 
         if (mode === "doi2bib" || mode === "isbn2bib") {

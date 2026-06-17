@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+REQUESTED_KEY_RE = re.compile(r"^\s*\{(?P<key>[^{}]+)\}\s*(?P<value>.+)$")
 
 
 @dataclass
@@ -16,6 +18,7 @@ class ISBNConversionResult:
     input_count: int
     failed_lines: List[str]
     duplicate_lines: List[str]
+    citation_keys: List[Optional[str]]
 
 
 def _is_valid_isbn(value: str) -> bool:
@@ -44,9 +47,31 @@ def normalize_isbn(raw: str) -> str:
     return clean
 
 
-def extract_isbns_from_lines(text: str) -> tuple[List[str], List[str], List[str], int]:
+def split_requested_key(raw: str) -> tuple[Optional[str], str]:
+    match = REQUESTED_KEY_RE.match(raw.strip())
+    if not match:
+        return None, raw
+
+    key = match.group("key").strip()
+    value = match.group("value").strip()
+    if not key or re.search(r"[\s,{}]", key):
+        raise ValueError("Khoá BibTeX trong ngoặc nhọn không hợp lệ")
+    return key, value
+
+
+def replace_bibtex_key(entry_text: str, next_key: str) -> str:
+    return re.sub(
+        r"^(@[^{\s]+\s*{\s*)([^,\s]+)(\s*,)",
+        lambda match: f"{match.group(1)}{next_key}{match.group(3)}",
+        entry_text,
+        count=1,
+    )
+
+
+def extract_isbns_from_lines(text: str) -> tuple[List[str], dict[str, str], List[str], List[str], int]:
     """Extract unique ISBNs from lines, tracking invalid and duplicate inputs."""
     valid: List[str] = []
+    requested_keys: dict[str, str] = {}
     failed: List[str] = []
     duplicates: List[str] = []
     seen: set[str] = set()
@@ -57,16 +82,19 @@ def extract_isbns_from_lines(text: str) -> tuple[List[str], List[str], List[str]
             continue
         input_count += 1
         try:
-            isbn = normalize_isbn(line)
+            requested_key, raw_isbn = split_requested_key(line)
+            isbn = normalize_isbn(raw_isbn)
             if isbn in seen:
                 duplicates.append(f"Dòng {idx}: {line.strip()} -> {isbn}")
                 continue
             seen.add(isbn)
             valid.append(isbn)
+            if requested_key:
+                requested_keys[isbn] = requested_key
         except ValueError as exc:
             failed.append(f"Dòng {idx}: {line.strip()} ({exc})")
 
-    return valid, failed, duplicates, input_count
+    return valid, requested_keys, failed, duplicates, input_count
 
 
 def fetch_isbn_bibtex_batch(isbns: List[str]) -> str:
@@ -113,7 +141,7 @@ def fetch_isbn_bibtex_batch(isbns: List[str]) -> str:
 
 def convert_isbn_lines(text: str) -> ISBNConversionResult:
     """Convert one ISBN per line to BibTeX using Paperpile API."""
-    valid_isbns, failed_lines, duplicate_lines, input_count = extract_isbns_from_lines(text)
+    valid_isbns, requested_keys, failed_lines, duplicate_lines, input_count = extract_isbns_from_lines(text)
 
     if not valid_isbns and failed_lines:
         raise ValueError("Không tìm thấy ISBN hợp lệ. Vui lòng nhập mỗi dòng một ISBN.")
@@ -130,21 +158,28 @@ def convert_isbn_lines(text: str) -> ISBNConversionResult:
         raise ValueError("Không thể lấy siêu dữ liệu cho bất kỳ ISBN nào từ dịch vụ.") from exc
 
     entries = _parse_bibtex_entries(bibtex_output)
+    citation_keys: List[Optional[str]] = []
+    entries_with_keys: List[str] = []
+    for isbn, entry in zip(valid_isbns, entries):
+        requested_key = requested_keys.get(isbn)
+        entries_with_keys.append(replace_bibtex_key(entry, requested_key) if requested_key else entry)
+        citation_keys.append(requested_key)
 
-    if not entries:
+    if not entries_with_keys:
         raise ValueError("API Paperpile không trả về mục BibTeX nào.")
 
-    output_text = "\n\n".join(entries).strip()
+    output_text = "\n\n".join(entries_with_keys).strip()
     if output_text:
         output_text += "\n"
 
     return ISBNConversionResult(
         output_text=output_text,
-        success_count=len(entries),
+        success_count=len(entries_with_keys),
         total_count=len(valid_isbns),
         input_count=input_count,
         failed_lines=failed_lines,
         duplicate_lines=duplicate_lines,
+        citation_keys=citation_keys,
     )
 
 

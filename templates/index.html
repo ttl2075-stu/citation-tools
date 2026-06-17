@@ -21,6 +21,10 @@
         <span class="material-symbols-outlined">library_books</span>
         <span>Quản lý BibTeX</span>
       </button>
+      <button type="button" id="manual-bibtex-btn" class="btn-outline btn-icon">
+        <span class="material-symbols-outlined">edit_note</span>
+        <span>Tạo BibTeX thủ công</span>
+      </button>
       <button type="button" id="settings-btn" class="btn-outline btn-icon">
         <span class="material-symbols-outlined">settings</span>
         <span>Cài đặt</span>
@@ -189,6 +193,44 @@
           <div id="tidy-warnings" class="warning-list"></div>
           <strong>Xem trước</strong>
           <textarea id="tidy-preview" readonly placeholder="Bản xem trước BibTeX đã định dạng sẽ hiển thị tại đây."></textarea>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="manual-bibtex-modal" class="modal-overlay hidden">
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <div>
+          <strong>Tạo BibTeX thủ công</strong>
+          <small>Dán mã BibTeX hoặc nhập thông tin bài viết để AI soạn giúp.</small>
+        </div>
+        <button id="close-manual-bibtex" type="button" class="btn-link">Đóng</button>
+      </div>
+
+      <div class="manual-bibtex-layout">
+        <section class="manager-panel">
+          <label>
+            Mã BibTeX
+            <textarea id="manual-bibtex-input" class="manual-bibtex-textarea" placeholder="@article{...}"></textarea>
+          </label>
+          <div class="modal-actions">
+            <button id="manual-bibtex-clear" type="button" class="btn-link">Xoá</button>
+            <button id="manual-bibtex-save" type="button" class="btn-primary">Lưu vào kho</button>
+          </div>
+        </section>
+
+        <section class="manager-panel">
+          <label>
+            Thông tin bài viết cho AI
+            <textarea id="ai-bibtex-source" class="manual-bibtex-textarea" placeholder="Tên bài, tác giả, năm, tạp chí/hội thảo, tập, số, trang, URL..."></textarea>
+          </label>
+          <div class="modal-actions">
+            <button id="ai-bibtex-generate" type="button" class="btn-primary btn-icon">
+              <span class="material-symbols-outlined">auto_awesome</span>
+              Tạo bằng AI
+            </button>
+          </div>
         </section>
       </div>
     </div>

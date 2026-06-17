@@ -62,6 +62,22 @@ BIBTEX_TO_RIS_TYPE: Dict[str, str] = {
     "magazine":       "MGZN",
 }
 
+FULL_MONTH_STRINGS: Dict[str, str] = {
+    "january": "January",
+    "february": "February",
+    "march": "March",
+    "april": "April",
+    "may": "May",
+    "june": "June",
+    "july": "July",
+    "august": "August",
+    "sept": "September",
+    "september": "September",
+    "october": "October",
+    "november": "November",
+    "december": "December",
+}
+
 RIS_TO_BIBTEX_TYPE: Dict[str, str] = {
     "JOUR":    "article",
     "JFULL":   "article",
@@ -161,8 +177,8 @@ def _annote_to_ris(annote: str) -> List[Tuple[str, str]]:
     return [("N2", annote.strip())]
 
 
-def _month_to_ris(month: str) -> List[Tuple[str, str]]:
-    """Best-effort convert month to numeric string for DA tag."""
+def _normalize_month(month: str) -> str:
+    """Best-effort normalize BibTeX month values to two digits."""
     month_map = {
         "jan": "01", "january": "01",
         "feb": "02", "february": "02",
@@ -172,13 +188,26 @@ def _month_to_ris(month: str) -> List[Tuple[str, str]]:
         "jun": "06", "june": "06",
         "jul": "07", "july": "07",
         "aug": "08", "august": "08",
-        "sep": "09", "september": "09",
+        "sep": "09", "sept": "09", "september": "09",
         "oct": "10", "october": "10",
         "nov": "11", "november": "11",
         "dec": "12", "december": "12",
     }
-    m = month_map.get(month.strip().lower(), month.strip())
-    return [("DA", m)]
+    cleaned = month.strip().lower().rstrip(".")
+    if re.fullmatch(r"\d{1,2}", cleaned):
+        month_number = int(cleaned)
+        if 1 <= month_number <= 12:
+            return f"{month_number:02d}"
+    return month_map.get(cleaned, month.strip())
+
+
+def _month_to_ris(month: str, year: str = "") -> List[Tuple[str, str]]:
+    """Convert BibTeX month to RIS DA, including year when available."""
+    normalized_month = _normalize_month(month)
+    normalized_year = year.strip()
+    if re.fullmatch(r"\d{4}", normalized_year) and re.fullmatch(r"\d{2}", normalized_month):
+        return [("DA", f"{normalized_year}/{normalized_month}")]
+    return [("DA", normalized_month)]
 
 
 # Simple one-to-one field mappings  {bibtex_key: ris_tag}
@@ -333,7 +362,8 @@ def convert_entry_to_ris(entry: dict) -> str:
     for bib_field, transform_fn in COMPLEX_FIELD_MAP.items():
         if bib_field in entry:
             raw = _clean_braces(entry[bib_field])
-            for tag, val in transform_fn(raw):
+            ris_values = _month_to_ris(raw, _clean_braces(entry.get("year", ""))) if bib_field == "month" else transform_fn(raw)
+            for tag, val in ris_values:
                 ris.append(f"{tag}  - {val}")
 
     # --- Simple one-to-one fields ------------------------------------------
@@ -492,6 +522,7 @@ def bibtex_to_ris(input_bib: str | Path, output_ris: str | Path) -> int:
     output_ris = Path(output_ris)
 
     parser = BibTexParser(common_strings=True)
+    parser.bib_database.strings.update(FULL_MONTH_STRINGS)
     parser.customization = lambda rec: homogenize_latex_encoding(convert_to_unicode(rec))
     parser.ignore_nonstandard_types = False
 

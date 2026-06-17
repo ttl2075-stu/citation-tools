@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -32,6 +33,62 @@ def test_bibtex_to_ris_latex() -> None:
     assert ("Muller" in content) or ("Müller" in content)
     assert "A&B" in content
     assert "TY  - JOUR" in content
+
+
+def test_bibtex_month_to_ris_date() -> None:
+    sample = """@article{monthdemo,
+  title = {Month Demo},
+  author = {Doe, Jane},
+  month = {may},
+  year = {2026}
+}"""
+
+    with tempfile.TemporaryDirectory() as td:
+        inp = Path(td) / "sample.bib"
+        out = Path(td) / "sample.ris"
+        inp.write_text(sample, encoding="utf-8")
+        count = bibtex_to_ris(inp, out)
+        content = out.read_text(encoding="utf-8")
+
+    assert count == 1
+    assert "PY  - 2026" in content
+    assert "DA  - 2026/05" in content
+
+
+def test_bibtex_full_month_string_to_ris_date() -> None:
+    month_cases = {
+        "january": "01",
+        "february": "02",
+        "march": "03",
+        "april": "04",
+        "may": "05",
+        "june": "06",
+        "july": "07",
+        "august": "08",
+        "sept": "09",
+        "september": "09",
+        "october": "10",
+        "november": "11",
+        "december": "12",
+    }
+
+    with tempfile.TemporaryDirectory() as td:
+        for month_name, month_number in month_cases.items():
+            sample = f"""@article{{monthdemo,
+  title = {{Month Demo}},
+  author = {{Doe, Jane}},
+  month = {month_name},
+  year = {{2026}}
+}}"""
+            inp = Path(td) / f"{month_name}.bib"
+            out = Path(td) / f"{month_name}.ris"
+            inp.write_text(sample, encoding="utf-8")
+            count = bibtex_to_ris(inp, out)
+            content = out.read_text(encoding="utf-8")
+
+            assert count == 1
+            assert "PY  - 2026" in content
+            assert f"DA  - 2026/{month_number}" in content
 
 
 def test_doi_bibtex_service() -> None:
@@ -78,6 +135,19 @@ def test_doi_formatting_and_duplicates() -> None:
     assert result.output_text.count("@article") == 1
 
 
+def test_doi_requested_key() -> None:
+    raw_entry = "@article{serviceKey,author={Doe, Jane},title={Sample Title},year={2026}}"
+    original_fetch = doi_converter.fetch_doi_bibtex
+    try:
+        doi_converter.fetch_doi_bibtex = lambda doi: raw_entry
+        result = convert_doi_lines("{customDoiKey}10.1000/demo", style="bibtex", lang="en-US")
+    finally:
+        doi_converter.fetch_doi_bibtex = original_fetch
+
+    assert result.citation_keys == ["customDoiKey"]
+    assert "@article{customDoiKey," in result.output_text
+
+
 def test_isbn_duplicates() -> None:
     """Test ISBN normalization and duplicate skipping using Paperpile API."""
     original_fetch = isbn_converter.fetch_isbn_bibtex_batch
@@ -107,6 +177,23 @@ def test_isbn_duplicates() -> None:
     assert result.input_count == 3
     assert len(result.duplicate_lines) == 2
     assert "@BOOK{key," in result.output_text
+
+
+def test_isbn_requested_key() -> None:
+    original_fetch = isbn_converter.fetch_isbn_bibtex_batch
+    try:
+        isbn_converter.fetch_isbn_bibtex_batch = lambda isbns: (
+            "@BOOK{serviceKey,\n"
+            "  title = {Book},\n"
+            "  year = {2024}\n"
+            "}\n"
+        )
+        result = convert_isbn_lines("{customIsbnKey}978-0-446-31078-9")
+    finally:
+        isbn_converter.fetch_isbn_bibtex_batch = original_fetch
+
+    assert result.citation_keys == ["customIsbnKey"]
+    assert "@BOOK{customIsbnKey," in result.output_text
 
 
 def test_separate_api_endpoints() -> None:
@@ -141,9 +228,21 @@ def test_separate_api_endpoints() -> None:
         assert doi_response.status_code == 200
         assert "@article{doiKey," in doi_response.get_json()["output_text"]
 
+        keyed_doi_response = client.post("/api/doi-to-bibtex", data={"input_text": "{myDoi}10.1000/demo"})
+        assert keyed_doi_response.status_code == 200
+        keyed_doi_payload = keyed_doi_response.get_json()
+        assert "@article{myDoi," in keyed_doi_payload["output_text"]
+        assert keyed_doi_payload["citation_keys"] == ["myDoi"]
+
         isbn_response = client.post("/api/isbn-to-bibtex", data={"input_text": "978-0-446-31078-9"})
         assert isbn_response.status_code == 200
         assert "@BOOK{isbnKey," in isbn_response.get_json()["output_text"]
+
+        keyed_isbn_response = client.post("/api/isbn-to-bibtex", data={"input_text": "{myIsbn}978-0-446-31078-9"})
+        assert keyed_isbn_response.status_code == 200
+        keyed_isbn_payload = keyed_isbn_response.get_json()
+        assert "@BOOK{myIsbn," in keyed_isbn_payload["output_text"]
+        assert keyed_isbn_payload["citation_keys"] == ["myIsbn"]
 
         tidy_response = client.post(
             "/api/bibtex-tidy",
@@ -165,11 +264,28 @@ def test_separate_api_endpoints() -> None:
         isbn_converter.fetch_isbn_bibtex_batch = original_isbn_fetch
 
 
+def test_ai_bibtex_endpoint_requires_configuration() -> None:
+    original_api_key = os.environ.pop("OPENAI_API_KEY", None)
+    client = flask_app.test_client()
+    try:
+        response = client.post("/api/ai-bibtex", json={"source_text": "Title: Demo Article"})
+        assert response.status_code == 500
+        assert "OPENAI_API_KEY" in response.get_json()["error"]
+    finally:
+        if original_api_key is not None:
+            os.environ["OPENAI_API_KEY"] = original_api_key
+
+
 if __name__ == "__main__":
     test_bibtex_to_ris_latex()
+    test_bibtex_month_to_ris_date()
+    test_bibtex_full_month_string_to_ris_date()
     test_doi_formatting_and_duplicates()
+    test_doi_requested_key()
     test_isbn_duplicates()
+    test_isbn_requested_key()
     test_separate_api_endpoints()
+    test_ai_bibtex_endpoint_requires_configuration()
 
     try:
         test_doi_bibtex_service()

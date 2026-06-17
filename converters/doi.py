@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 DOI_URL_RE = re.compile(r"^(?:https?://)?(?:dx\.)?doi\.org/(?P<doi>.+)$", re.IGNORECASE)
 DOI_RAW_RE = re.compile(r"^10\.\d{4,9}/\S+$", re.IGNORECASE)
+REQUESTED_KEY_RE = re.compile(r"^\s*\{(?P<key>[^{}]+)\}\s*(?P<value>.+)$")
 
 
 @dataclass
@@ -19,6 +20,7 @@ class DOIConversionResult:
     input_count: int
     failed_lines: List[str]
     duplicate_lines: List[str]
+    citation_keys: List[Optional[str]]
 
 
 def _split_top_level_csv(text: str) -> List[str]:
@@ -96,6 +98,27 @@ def format_bibtex_entry(raw_bibtex: str) -> str:
     return "\n".join(lines)
 
 
+def split_requested_key(raw: str) -> tuple[Optional[str], str]:
+    match = REQUESTED_KEY_RE.match(raw.strip())
+    if not match:
+        return None, raw
+
+    key = match.group("key").strip()
+    value = match.group("value").strip()
+    if not key or re.search(r"[\s,{}]", key):
+        raise ValueError("Khoá BibTeX trong ngoặc nhọn không hợp lệ")
+    return key, value
+
+
+def replace_bibtex_key(entry_text: str, next_key: str) -> str:
+    return re.sub(
+        r"^(@[^{\s]+\s*{\s*)([^,\s]+)(\s*,)",
+        lambda match: f"{match.group(1)}{next_key}{match.group(3)}",
+        entry_text,
+        count=1,
+    )
+
+
 def normalize_doi(raw: str) -> str:
     """Normalize DOI input from raw DOI or doi.org URL forms."""
     value = raw.strip()
@@ -117,9 +140,10 @@ def normalize_doi(raw: str) -> str:
     return value.lower()
 
 
-def extract_dois_from_lines(text: str) -> tuple[List[str], List[str], List[str], int]:
+def extract_dois_from_lines(text: str) -> tuple[List[str], dict[str, str], List[str], List[str], int]:
     """Extract unique DOIs from lines, tracking invalid and duplicate inputs."""
     valid: List[str] = []
+    requested_keys: dict[str, str] = {}
     failed: List[str] = []
     duplicates: List[str] = []
     seen: set[str] = set()
@@ -130,16 +154,19 @@ def extract_dois_from_lines(text: str) -> tuple[List[str], List[str], List[str],
             continue
         input_count += 1
         try:
-            doi = normalize_doi(line)
+            requested_key, raw_doi = split_requested_key(line)
+            doi = normalize_doi(raw_doi)
             if doi in seen:
                 duplicates.append(f"Dòng {idx}: {line.strip()} -> {doi}")
                 continue
             seen.add(doi)
             valid.append(doi)
+            if requested_key:
+                requested_keys[doi] = requested_key
         except ValueError as exc:
             failed.append(f"Dòng {idx}: {line.strip()} ({exc})")
 
-    return valid, failed, duplicates, input_count
+    return valid, requested_keys, failed, duplicates, input_count
 
 
 def fetch_doi_bibtex(doi: str) -> str:
@@ -190,18 +217,22 @@ def convert_doi_lines(text: str, style: str = "bibtex", lang: str = "en-US") -> 
     style_normalized = (style or "bibtex").strip().lower()
     lang_normalized = (lang or "en-US").strip() or "en-US"
 
-    valid_dois, failed_lines, duplicate_lines, input_count = extract_dois_from_lines(text)
+    valid_dois, requested_keys, failed_lines, duplicate_lines, input_count = extract_dois_from_lines(text)
     if not valid_dois and failed_lines:
         raise ValueError("Không tìm thấy DOI hợp lệ. Vui lòng nhập mỗi dòng một DOI.")
     if not valid_dois:
         raise ValueError("Chưa có DOI. Vui lòng nhập mỗi dòng một DOI.")
 
     output_chunks: List[str] = []
+    citation_keys: List[Optional[str]] = []
 
     for doi in valid_dois:
         try:
             if style_normalized == "bibtex":
-                output_chunks.append(format_bibtex_entry(fetch_doi_bibtex(doi)))
+                bibtex = format_bibtex_entry(fetch_doi_bibtex(doi))
+                requested_key = requested_keys.get(doi)
+                output_chunks.append(replace_bibtex_key(bibtex, requested_key) if requested_key else bibtex)
+                citation_keys.append(requested_key)
             else:
                 output_chunks.append(fetch_doi_citation(doi, style_normalized, lang_normalized))
         except Exception as exc:
@@ -222,6 +253,7 @@ def convert_doi_lines(text: str, style: str = "bibtex", lang: str = "en-US") -> 
         input_count=input_count,
         failed_lines=failed_lines,
         duplicate_lines=duplicate_lines,
+        citation_keys=citation_keys,
     )
 
 

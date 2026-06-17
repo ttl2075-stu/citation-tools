@@ -467,6 +467,12 @@ textarea {
   gap: 12px;
 }
 
+.manual-bibtex-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 12px;
+}
+
 .manager-panel {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -511,7 +517,8 @@ textarea {
 }
 
 #tidy-preview,
-#entry-textarea {
+#entry-textarea,
+.manual-bibtex-textarea {
   width: 100%;
   min-height: 360px;
   border: 1px solid var(--border);
@@ -577,6 +584,7 @@ textarea {
   }
 
   .manager-layout,
+  .manual-bibtex-layout,
   .form-grid,
   .option-grid {
     grid-template-columns: 1fr;
