@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Citation to BibTeX</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-group">
+        <img src="../icons/icon48.png" alt="Citation to BibTeX Logo" class="app-icon">
+        <div>
+          <h1 class="app-title">Citation to BibTeX</h1>
+          <p class="app-subtitle">DOI • arXiv • ISBN • References</p>
+        </div>
+      </div>
+      <a href="https://bib2ris.long.pro.vn" target="_blank" class="header-link" title="Mở Web App BibTeX / RIS Converter">
+        Web App &nearr;
+      </a>
+    </header>
+
+    <!-- Auto-detected Reference Banner -->
+    <div id="detected-banner" class="detected-banner hidden">
+      <div class="badge-dot"></div>
+      <span id="detected-text" class="detected-text">Đã phát hiện tài liệu từ trang</span>
+      <select id="ref-select" class="ref-select hidden" title="Chọn tài liệu khác trên trang"></select>
+    </div>
+
+    <!-- Input Section -->
+    <main class="main-content">
+      <div class="form-group">
+        <div class="label-row">
+          <label for="input-identifier" class="form-label">Tài liệu tham khảo / Mã định danh</label>
+          <span id="type-detector-badge" class="badge-tag hidden">DOI</span>
+        </div>
+        <div class="input-wrapper">
+          <textarea 
+            id="input-identifier" 
+            class="form-textarea" 
+            rows="2"
+            placeholder="Nhập DOI (10.xxxx), arXiv ID, ISBN (978-...), URL hoặc thông tin trích dẫn..."
+            autocomplete="off"
+            spellcheck="false"
+          ></textarea>
+          <button id="btn-clear" class="btn-icon hidden" title="Xóa">&times;</button>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group flex-1">
+          <label for="citekey-input" class="form-label">
+            Citation Key <span class="label-hint">(Tùy chọn)</span>
+          </label>
+          <input 
+            type="text" 
+            id="citekey-input" 
+            class="form-input" 
+            placeholder="vd: authorYear"
+            autocomplete="off"
+            spellcheck="false"
+          >
+        </div>
+      </div>
+
+      <!-- Settings Option: Auto Copy Toggle -->
+      <div class="settings-row">
+        <label class="toggle-label" title="Tự động sao chép BibTeX vào Clipboard ngay khi lấy xong">
+          <input type="checkbox" id="toggle-autocopy" checked>
+          <span class="toggle-custom"></span>
+          <span class="toggle-text">Tự động sao chép vào Clipboard (Auto-copy)</span>
+        </label>
+      </div>
+
+      <button id="btn-fetch" class="btn btn-primary btn-block">
+        <span class="btn-text">Trích xuất mã BibTeX</span>
+        <span class="spinner hidden"></span>
+      </button>
+
+      <!-- Status / Notification Alert -->
+      <div id="status-box" class="status-box hidden"></div>
+
+      <!-- Result Area -->
+      <div id="result-section" class="result-section hidden">
+        <div class="result-header">
+          <div class="result-badges">
+            <span id="entry-type-badge" class="badge">@article</span>
+            <span id="source-badge" class="badge-sub">DOI.org</span>
+          </div>
+          <span id="copy-toast-badge" class="copy-toast hidden">✓ Đã tự động sao chép</span>
+        </div>
+        <textarea id="bibtex-output" class="bibtex-textarea" readonly spellcheck="false"></textarea>
+
+        <div class="action-buttons">
+          <button id="btn-copy" class="btn btn-success flex-1">
+            <svg class="icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span id="copy-btn-text">Sao chép BibTeX</span>
+          </button>
+          <button id="btn-download" class="btn btn-secondary" title="Tải file .bib">
+            <svg class="icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            .bib
+          </button>
+          <button id="btn-send-webapp" class="btn btn-secondary" title="Mở Web App BibTeX / RIS Converter">
+            <svg class="icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+            RIS
+          </button>
+        </div>
+      </div>
+
+      <!-- Recent History Accordion -->
+      <details id="history-details" class="history-details">
+        <summary class="history-summary">Lịch sử tra cứu gần đây (<span id="history-count">0</span>)</summary>
+        <div id="history-list" class="history-list">
+          <p class="empty-history">Chưa có lịch sử tra cứu.</p>
+        </div>
+      </details>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>Trích xuất đa định dạng • Tương thích LaTeX &amp; Reference Managers</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

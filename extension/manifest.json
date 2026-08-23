@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "Citation to BibTeX - Reference Extractor",
+  "version": "1.1.0",
+  "description": "Tự động trích xuất DOI, ISBN, arXiv và tài liệu tham khảo khoa học thành định dạng BibTeX chuẩn chỉ trong 1 cú nhấp chuột.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "Trích xuất BibTeX từ tài liệu tham khảo"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "contextMenus",
+    "clipboardWrite",
+    "storage",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://doi.org/*",
+    "https://*.doi.org/*",
+    "https://export.arxiv.org/*",
+    "https://openlibrary.org/*",
+    "https://api.crossref.org/*",
+    "https://bib2ris.long.pro.vn/*",
+    "http://127.0.0.1:5000/*"
+  ]
+}

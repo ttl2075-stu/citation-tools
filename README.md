@@ -12,6 +12,7 @@ Published demo: <https://bib2ris.long.pro.vn>
 - Convert `RIS -> BibTeX`
 - Convert DOI lists to BibTeX
 - Convert ISBN lists to BibTeX
+- Browser Extension (Manifest V3) for 1-click DOI to BibTeX extraction
 - Store generated BibTeX entries in the browser with `localStorage`
 - Edit citation keys before saving entries
 - Create manual BibTeX entries for references without DOI/ISBN/publication codes
